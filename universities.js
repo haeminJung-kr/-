@@ -1,0 +1,22 @@
+export const universities = [
+    { name: "서울대학교", enName: "Seoul National University", coords: [126.9519, 37.4598], region: "서울" },
+    { name: "연세대학교", enName: "Yonsei University", coords: [126.9386, 37.5658], region: "서울" },
+    { name: "고려대학교", enName: "Korea University", coords: [127.0323, 37.5894], region: "서울" },
+    { name: "카이스트", enName: "KAIST", coords: [127.3604, 36.3721], region: "대전" },
+    { name: "포항공과대학교", enName: "POSTECH", coords: [129.3258, 36.0142], region: "경북" },
+    { name: "성균관대학교", enName: "Sungkyunkwan University", coords: [126.9936, 37.5882], region: "서울" },
+    { name: "한양대학교", enName: "Hanyang University", coords: [127.0453, 37.5572], region: "서울" },
+    { name: "경희대학교", enName: "Kyung Hee University", coords: [127.0548, 37.5970], region: "서울" },
+    { name: "이화여자대학교", enName: "Ewha Womans University", coords: [126.9468, 37.5618], region: "서울" },
+    { name: "서강대학교", enName: "Sogang University", coords: [126.9410, 37.5509], region: "서울" },
+    { name: "중앙대학교", enName: "Chung-Ang University", coords: [126.9571, 37.5050], region: "서울" },
+    { name: "부산대학교", enName: "Pusan National University", coords: [129.0794, 35.2332], region: "부산" },
+    { name: "경북대학교", enName: "Kyungpook National University", coords: [128.6103, 35.8888], region: "대구" },
+    { name: "전남대학교", enName: "Chonnam National University", coords: [126.9080, 35.1765], region: "광주" },
+    { name: "충남대학교", enName: "Chungnam National University", coords: [127.3458, 36.3621], region: "대전" },
+    { name: "강원대학교", enName: "Kangwon National University", coords: [127.7441, 37.8687], region: "강원" },
+    { name: "제주대학교", enName: "Jeju National University", coords: [126.5615, 33.4560], region: "제주" },
+    { name: "아주대학교", enName: "Ajou University", coords: [127.0463, 37.2830], region: "경기" },
+    { name: "인하대학교", enName: "Inha University", coords: [126.6545, 37.4500], region: "인천" },
+    { name: "건국대학교", enName: "Konkuk University", coords: [127.0754, 37.5408], region: "서울" }
+];
