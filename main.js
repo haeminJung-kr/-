@@ -6,6 +6,10 @@ class DaeMeChu2D {
         this.ctx = this.canvas.getContext('2d');
         this.card = document.getElementById('uni-card');
         
+        // Offscreen canvas for map pre-rendering
+        this.offCanvas = document.createElement('canvas');
+        this.offCtx = this.offCanvas.getContext('2d');
+        
         this.width = 0;
         this.height = 0;
         this.pixelRatio = window.devicePixelRatio || 1;
@@ -19,20 +23,21 @@ class DaeMeChu2D {
         this.targetOffsetY = 0;
         
         this.geoData = null;
-        this.selectedUni = null;
+        this.mapDirty = true; // Flag to redraw map to offscreen canvas
         
         this.init();
     }
 
     async init() {
         this.resize();
-        window.addEventListener('resize', () => this.resize());
+        window.addEventListener('resize', () => {
+            this.resize();
+            this.mapDirty = true;
+        });
         
         await this.loadGeoJson();
         this.setupSearch();
         this.animate();
-        
-        // Initial map centering
         this.centerMap();
     }
 
@@ -40,6 +45,7 @@ class DaeMeChu2D {
         try {
             const response = await fetch('https://raw.githubusercontent.com/southkorea/southkorea-maps/master/gadm/json/skorea-provinces-geo.json');
             this.geoData = await response.json();
+            this.mapDirty = true;
         } catch (e) {
             console.error('Failed to load map:', e);
         }
@@ -48,78 +54,96 @@ class DaeMeChu2D {
     resize() {
         this.width = window.innerWidth;
         this.height = window.innerHeight;
-        this.canvas.width = this.width * this.pixelRatio;
-        this.canvas.height = this.height * this.pixelRatio;
-        this.ctx.scale(this.pixelRatio, this.pixelRatio);
-        this.centerMap();
+        
+        const setupCanvas = (canvas) => {
+            canvas.width = this.width * this.pixelRatio;
+            canvas.height = this.height * this.pixelRatio;
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
+        };
+
+        setupCanvas(this.canvas);
+        setupCanvas(this.offCanvas);
     }
 
     centerMap() {
-        // South Korea roughly: Lon [124, 131], Lat [33, 39]
         this.scale = Math.min(this.width, this.height) * 0.15;
         this.targetScale = this.scale;
         this.offsetX = this.width / 2;
         this.offsetY = this.height / 2;
         this.targetOffsetX = this.offsetX;
         this.targetOffsetY = this.offsetY;
+        this.mapDirty = true;
     }
 
-    project(lon, lat) {
-        // Lon -> X, Lat -> -Y (Canvas Y is down)
-        const x = (lon - 127.5) * this.scale + this.offsetX;
-        const y = (36 - lat) * this.scale * 1.2 + this.offsetY; // 1.2 aspect correction
+    project(lon, lat, scale, offsetX, offsetY) {
+        const x = (lon - 127.5) * scale + offsetX;
+        const y = (36 - lat) * scale * 1.2 + offsetY;
         return { x, y };
     }
 
     animate() {
-        this.ctx.clearRect(0, 0, this.width, this.height);
-        
-        // Smooth lerp for zoom/pan
-        this.scale += (this.targetScale - this.scale) * 0.08;
-        this.offsetX += (this.targetOffsetX - this.offsetX) * 0.08;
-        this.offsetY += (this.targetOffsetY - this.offsetY) * 0.08;
+        // Smooth lerp
+        const ds = (this.targetScale - this.scale) * 0.1;
+        const dx = (this.targetOffsetX - this.offsetX) * 0.1;
+        const dy = (this.targetOffsetY - this.offsetY) * 0.1;
 
-        if (this.geoData) {
-            this.drawMap();
+        if (Math.abs(ds) > 0.001 || Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
+            this.scale += ds;
+            this.offsetX += dx;
+            this.offsetY += dy;
+            this.mapDirty = true;
         }
+
+        if (this.mapDirty) {
+            this.renderOffscreen();
+            this.mapDirty = false;
+        }
+
+        this.ctx.clearRect(0, 0, this.width, this.height);
+        this.ctx.drawImage(this.offCanvas, 0, 0, this.width, this.height);
+        
         this.drawMarkers();
         
         requestAnimationFrame(() => this.animate());
     }
 
-    drawMap() {
-        this.ctx.beginPath();
-        this.ctx.strokeStyle = '#e0e0e0';
-        this.ctx.lineWidth = 1;
-        this.ctx.fillStyle = '#f7f7f7';
+    renderOffscreen() {
+        const ctx = this.offCtx;
+        ctx.clearRect(0, 0, this.width, this.height);
+        
+        if (!this.geoData) return;
+
+        ctx.beginPath();
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        ctx.fillStyle = '#f7f7f7';
 
         this.geoData.features.forEach(feature => {
-            const type = feature.geometry.type;
             const coords = feature.geometry.coordinates;
-
-            if (type === 'Polygon') {
-                this.drawPolygon(coords[0]);
-            } else if (type === 'MultiPolygon') {
-                coords.forEach(poly => this.drawPolygon(poly[0]));
+            if (feature.geometry.type === 'Polygon') {
+                this.drawPolygon(ctx, coords[0]);
+            } else {
+                coords.forEach(poly => this.drawPolygon(ctx, poly[0]));
             }
         });
-        this.ctx.fill();
-        this.ctx.stroke();
+        ctx.fill();
+        ctx.stroke();
     }
 
-    drawPolygon(points) {
+    drawPolygon(ctx, points) {
         points.forEach((p, i) => {
-            const { x, y } = this.project(p[0], p[1]);
-            if (i === 0) this.ctx.moveTo(x, y);
-            else this.ctx.lineTo(x, y);
+            const { x, y } = this.project(p[0], p[1], this.scale, this.offsetX, this.offsetY);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
         });
     }
 
     drawMarkers() {
         universities.forEach(uni => {
-            const { x, y } = this.project(uni.coords[0], uni.coords[1]);
+            const { x, y } = this.project(uni.coords[0], uni.coords[1], this.scale, this.offsetX, this.offsetY);
             
-            // Pulse effect
+            // Pulse (Only markers animate on main canvas for performance)
             const pulse = Math.sin(Date.now() * 0.005) * 2;
             
             this.ctx.beginPath();
@@ -148,7 +172,7 @@ class DaeMeChu2D {
             const filtered = universities.filter(u => 
                 u.name.toLowerCase().includes(val) || 
                 u.enName.toLowerCase().includes(val)
-            );
+            ).slice(0, 10); // Limit search results
 
             if (filtered.length > 0) {
                 results.innerHTML = filtered.map(u => `
@@ -175,18 +199,9 @@ class DaeMeChu2D {
     }
 
     selectUniversity(uni) {
-        this.selectedUni = uni;
-        
-        // Zoom-in target
-        this.targetScale = Math.min(this.width, this.height) * 2;
-        
-        // Center the selected university
-        // The project function uses targetScale/offsetX internally, but we need to calculate
-        // where to set targetOffsetX/Y so that (uni.coords) ends up at (width/2, height/2).
-        // x = (lon - 127.5) * scale + offsetX => offsetX = x - (lon - 127.5) * scale
+        this.targetScale = Math.min(this.width, this.height) * 2.5;
         this.targetOffsetX = (this.width / 2) - (uni.coords[0] - 127.5) * this.targetScale;
         this.targetOffsetY = (this.height / 2) + (uni.coords[1] - 36) * this.targetScale * 1.2;
-
         this.showCard(uni);
     }
 
